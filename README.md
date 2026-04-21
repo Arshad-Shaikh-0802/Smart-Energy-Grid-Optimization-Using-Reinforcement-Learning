@@ -73,7 +73,3 @@ Saves `best_model.pth` whenever evaluation reward improves.
 - 📋 **Action log** with color-coded entries + explanations
 - 📈 **Training curve** with smoothing (reward / renewable / epsilon tabs)
 - ▶ **Step-by-step** or full **episode animation** (SSE streaming)
-
-### Heuristic Fallback
-Works without any trained model — a rule-based policy handles all decisions and generates human-readable reasoning strings like:
-> "strong solar, battery low, cheap tariff → Charge battery"
