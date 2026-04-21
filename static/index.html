@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Smart Energy Grid — RL Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #f4f3f0;
+    --bg2: #eceae5;
+    --surface: #ffffff;
+    --surface2: #f9f8f6;
+    --border: #e2dfd8;
+    --border2: #d0cdc5;
+    --text-primary: #1a1916;
+    --text-secondary: #5c5a55;
+    --text-muted: #9c9a94;
+    --accent: #1a6b4a;       /* deep green */
+    --accent2: #2563eb;      /* blue */
+    --accent3: #d97706;      /* amber */
+    --solar: #f59e0b;
+    --wind: #3b82f6;
+    --demand: #ef4444;
+    --battery: #8b5cf6;
+    --grid-buy: #ef4444;
+    --grid-sell: #22c55e;
+    --idle: #94a3b8;
+    --charge: #3b82f6;
+    --discharge: #f97316;
+    --radius: 12px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.05);
+    --shadow-lg: 0 4px 24px rgba(0,0,0,0.10);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: var(--bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  /* ---- HEADER ---- */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 1px 0 var(--border);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.1rem;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+  }
+  .logo-icon {
+    width: 32px; height: 32px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem;
+  }
+  .logo-sub {
+    font-family: 'DM Mono', monospace;
+    font-weight: 300;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  /* ---- STATUS BADGE ---- */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 100px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    font-weight: 500;
+    border: 1px solid;
+  }
+  .badge-green { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
+  .badge-amber { background: #fffbeb; color: #92400e; border-color: #fde68a; }
+  .badge-blue  { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .dot-pulse { animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* ---- CONTROLS ---- */
+  .controls {
+    display: flex;
+    gap: 8px;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 16px;
+    border-radius: 8px;
+    font-family: 'Inter', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 500;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+  }
+  .btn-primary:hover { background: #155c3e; }
+  .btn-secondary {
+    background: var(--surface);
+    color: var(--text-secondary);
+    border-color: var(--border2);
+  }
+  .btn-secondary:hover { background: var(--bg2); border-color: var(--border2); }
+  .btn-danger {
+    background: #fef2f2;
+    color: #dc2626;
+    border-color: #fecaca;
+  }
+  .btn-danger:hover { background: #fee2e2; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  /* ---- LAYOUT ---- */
+  main {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 1.5rem 2rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    grid-template-rows: auto;
+    gap: 1rem;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px 10px;
+    border-bottom: 1px solid var(--border);
+  }
+  .card-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.82rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+  .card-body { padding: 16px 18px; }
+
+  /* ---- TIMELINE (HOUR INDICATOR) ---- */
+  .timeline-bar {
+    grid-column: 1 / -1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .tl-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+  .hours-track {
+    flex: 1;
+    display: grid;
+    grid-template-columns: repeat(24, 1fr);
+    gap: 2px;
+    height: 28px;
+  }
+  .hour-cell {
+    border-radius: 3px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.55rem;
+    color: var(--text-muted);
+    transition: all 0.2s;
+    cursor: default;
+  }
+  .hour-cell.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+    transform: scaleY(1.1);
+  }
+  .hour-cell.done-step {
+    background: var(--bg2);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  /* ---- KPI ROW ---- */
+  .kpi-grid {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 1rem;
+  }
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 16px 18px;
+    position: relative;
+    overflow: hidden;
+  }
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--kpi-color, var(--accent));
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+  .kpi-label {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-bottom: 8px;
+  }
+  .kpi-value {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    line-height: 1;
+  }
+  .kpi-unit {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    margin-top: 4px;
+  }
+  .kpi-delta {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--accent);
+    margin-top: 4px;
+  }
+
+  /* ---- ENERGY FLOW CHART (spans 2 cols) ---- */
+  .chart-2col { grid-column: span 2; }
+  .chart-1col { grid-column: span 1; }
+
+  .chart-wrap {
+    position: relative;
+    height: 200px;
+    padding: 8px 4px 4px;
+  }
+
+  /* ---- BATTERY GAUGE ---- */
+  .battery-gauge-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+    gap: 12px;
+  }
+  .battery-outer {
+    width: 100%;
+    max-width: 280px;
+    height: 44px;
+    border-radius: 8px;
+    border: 2px solid var(--border2);
+    background: var(--bg2);
+    position: relative;
+    overflow: hidden;
+  }
+  .battery-fill {
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.6s ease, background 0.6s;
+    background: linear-gradient(90deg, #8b5cf6, #a78bfa);
+  }
+  .battery-fill.low  { background: linear-gradient(90deg, #ef4444, #f87171); }
+  .battery-fill.high { background: linear-gradient(90deg, #22c55e, #4ade80); }
+  .battery-text {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  }
+  .battery-cap {
+    width: 8px; height: 22px;
+    background: var(--border2);
+    border-radius: 0 4px 4px 0;
+    margin-left: -1px;
+    align-self: center;
+  }
+  .battery-row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    max-width: 280px;
+    gap: 4px;
+  }
+
+  /* ---- PRICE INDICATOR ---- */
+  .price-indicator {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 4px 0;
+  }
+  .price-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.78rem;
+  }
+  .price-bar-label {
+    width: 60px;
+    color: var(--text-muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+  }
+  .price-bar-track {
+    flex: 1;
+    height: 8px;
+    background: var(--bg2);
+    border-radius: 4px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .price-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.5s;
+    background: linear-gradient(90deg, #22c55e, #f59e0b, #ef4444);
+    background-size: 300% 100%;
+  }
+  .price-value {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-primary);
+    width: 48px;
+    text-align: right;
+  }
+
+  /* ---- ACTION LOG ---- */
+  .action-log {
+    grid-column: 1 / -1;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+  .action-log-body {
+    padding: 8px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .action-entry {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    animation: slideIn 0.3s ease;
+    font-size: 0.82rem;
+  }
+  @keyframes slideIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:none} }
+
+  .action-hour {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+    min-width: 40px;
+  }
+  .action-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 10px;
+    border-radius: 100px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .action-reasoning {
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    flex: 1;
+  }
+  .action-reward {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  /* ---- Q VALUES ---- */
+  .q-values {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 4px 0;
+  }
+  .q-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.78rem;
+  }
+  .q-label {
+    width: 110px;
+    color: var(--text-secondary);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .q-track {
+    flex: 1;
+    height: 10px;
+    background: var(--bg2);
+    border-radius: 5px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .q-fill {
+    height: 100%;
+    border-radius: 5px;
+    transition: width 0.4s ease;
+    background: var(--accent2);
+  }
+  .q-fill.best { background: var(--accent); }
+  .q-val {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    width: 44px;
+    text-align: right;
+  }
+
+  /* ---- TRAIN CURVE SECTION ---- */
+  .train-section {
+    grid-column: 1 / -1;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .train-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    padding: 0 18px;
+  }
+  .train-tab {
+    padding: 10px 16px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    font-family: 'Inter', sans-serif;
+  }
+  .train-tab:hover { color: var(--text-primary); }
+  .train-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .train-chart-wrap { height: 200px; padding: 16px 18px 8px; }
+
+  /* ---- SCROLLBAR ---- */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg2); }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  /* ---- RESPONSIVE ---- */
+  @media (max-width: 1100px) {
+    main { grid-template-columns: 1fr 1fr; }
+    .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+    .chart-2col { grid-column: span 2; }
+  }
+  @media (max-width: 700px) {
+    main { grid-template-columns: 1fr; padding: 1rem; }
+    .kpi-grid { grid-template-columns: 1fr 1fr; }
+    .chart-2col { grid-column: span 1; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ================================================================
+     HEADER
+================================================================ -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">⚡</div>
+    <div>
+      <div>Smart Energy Grid</div>
+      <div class="logo-sub">Reinforcement Learning · DQN · Microgrid</div>
+    </div>
+  </div>
+
+  <div class="header-right">
+    <div class="badge badge-amber" id="model-badge">
+      <span class="dot dot-pulse"></span>
+      <span>Heuristic Mode</span>
+    </div>
+    <div class="badge badge-blue" id="hour-badge">
+      <span>Hour 00/24</span>
+    </div>
+    <div class="controls">
+      <button class="btn btn-secondary" id="btn-train-curve" onclick="loadTrainCurve()">📈 Training Curve</button>
+      <button class="btn btn-secondary" id="btn-step" onclick="stepOnce()">Step ▶</button>
+      <button class="btn btn-primary" id="btn-run" onclick="runEpisode()">▶ Run Episode</button>
+      <button class="btn btn-danger" id="btn-reset" onclick="resetSim()">↺ Reset</button>
+    </div>
+  </div>
+</header>
+
+<!-- ================================================================
+     MAIN GRID
+================================================================ -->
+<main>
+
+  <!-- TIMELINE -->
+  <div class="timeline-bar">
+    <span class="tl-label">Timeline</span>
+    <div class="hours-track" id="hours-track">
+      <!-- filled by JS -->
+    </div>
+  </div>
+
+  <!-- KPI CARDS -->
+  <div class="kpi-grid">
+    <div class="kpi-card" style="--kpi-color: var(--solar)">
+      <div class="kpi-label">Solar Output</div>
+      <div class="kpi-value" id="kpi-solar">—</div>
+      <div class="kpi-unit">kW</div>
+    </div>
+    <div class="kpi-card" style="--kpi-color: var(--wind)">
+      <div class="kpi-label">Wind Output</div>
+      <div class="kpi-value" id="kpi-wind">—</div>
+      <div class="kpi-unit">kW</div>
+    </div>
+    <div class="kpi-card" style="--kpi-color: var(--demand)">
+      <div class="kpi-label">Demand</div>
+      <div class="kpi-value" id="kpi-demand">—</div>
+      <div class="kpi-unit">kW</div>
+    </div>
+    <div class="kpi-card" style="--kpi-color: var(--accent)">
+      <div class="kpi-label">Renewable Ratio</div>
+      <div class="kpi-value" id="kpi-renewable">—</div>
+      <div class="kpi-unit">% of demand</div>
+    </div>
+    <div class="kpi-card" style="--kpi-color: #ef4444">
+      <div class="kpi-label">Total Cost</div>
+      <div class="kpi-value" id="kpi-cost">—</div>
+      <div class="kpi-unit">USD</div>
+    </div>
+  </div>
+
+  <!-- ENERGY FLOW CHART -->
+  <div class="card chart-2col">
+    <div class="card-header">
+      <span class="card-title">Energy Flow — 24h</span>
+      <span class="badge badge-green" style="font-size:0.65rem">Live</span>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="energy-chart"></canvas>
+    </div>
+  </div>
+
+  <!-- BATTERY + PRICE -->
+  <div class="card chart-1col">
+    <div class="card-header">
+      <span class="card-title">Battery & Pricing</span>
+    </div>
+    <div class="card-body">
+      <!-- Battery gauge -->
+      <div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">
+        Battery State of Charge
+      </div>
+      <div class="battery-row">
+        <div class="battery-outer">
+          <div class="battery-fill" id="battery-fill" style="width:50%"></div>
+          <div class="battery-text" id="battery-text">10.0 kWh</div>
+        </div>
+        <div class="battery-cap"></div>
+      </div>
+      <div style="font-size:0.7rem;color:var(--text-muted);margin:4px 0 16px;font-family:'DM Mono',monospace">
+        Capacity: 20 kWh | Efficiency: 92%
+      </div>
+
+      <!-- Price indicator -->
+      <div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">
+        Grid Price
+      </div>
+      <div class="price-indicator" id="price-indicator">
+        <div class="price-bar-wrap">
+          <span class="price-bar-label">Current</span>
+          <div class="price-bar-track">
+            <div class="price-bar-fill" id="price-fill" style="width:40%;background-position:40% 0"></div>
+          </div>
+          <span class="price-value" id="price-value">$0.00</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- REWARD CHART -->
+  <div class="card chart-2col">
+    <div class="card-header">
+      <span class="card-title">Reward Accumulation</span>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="reward-chart"></canvas>
+    </div>
+  </div>
+
+  <!-- Q VALUES / EXPLAINABILITY -->
+  <div class="card chart-1col">
+    <div class="card-header">
+      <span class="card-title">Agent Decision</span>
+    </div>
+    <div class="card-body">
+      <div style="margin-bottom:12px">
+        <div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px">Last Action</div>
+        <div id="last-action-pill" class="action-pill" style="background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0">
+          ⏸ Waiting…
+        </div>
+        <div id="last-reasoning" style="font-size:0.78rem;color:var(--text-secondary);margin-top:8px;line-height:1.4">
+          Start the simulation to see agent reasoning.
+        </div>
+      </div>
+
+      <div style="font-size:0.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:8px">
+        Q-Values
+      </div>
+      <div class="q-values" id="q-values">
+        <div class="q-row" style="color:var(--text-muted);font-size:0.72rem">Run episode to see Q-values</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACTION LOG -->
+  <div class="card action-log">
+    <div class="card-header">
+      <span class="card-title">Action Log</span>
+      <span id="log-count" style="font-family:'DM Mono',monospace;font-size:0.7rem;color:var(--text-muted)">0 steps</span>
+    </div>
+    <div class="action-log-body" id="action-log-body">
+      <div style="color:var(--text-muted);font-size:0.82rem;padding:8px 0">
+        Press "Run Episode" or "Step ▶" to begin the simulation.
+      </div>
+    </div>
+  </div>
+
+  <!-- TRAINING CURVE (hidden initially) -->
+  <div class="train-section" id="train-section" style="display:none">
+    <div class="card-header" style="padding:12px 18px 0;border-bottom:none">
+      <span class="card-title">Training Analytics</span>
+      <button onclick="document.getElementById('train-section').style.display='none'"
+              style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:1.1rem">✕</button>
+    </div>
+    <div class="train-tabs">
+      <button class="train-tab active" onclick="switchTrainTab('reward')">Episode Reward</button>
+      <button class="train-tab" onclick="switchTrainTab('renewable')">Renewable Ratio</button>
+      <button class="train-tab" onclick="switchTrainTab('epsilon')">Exploration (ε)</button>
+    </div>
+    <div class="train-chart-wrap">
+      <canvas id="train-chart"></canvas>
+    </div>
+  </div>
+
+</main>
+
+<!-- ================================================================
+     JAVASCRIPT
+================================================================ -->
+<script>
+// ---- Chart.js Defaults ----
+Chart.defaults.font.family = "'DM Mono', monospace";
+Chart.defaults.color = '#9c9a94';
+
+const COLORS = {
+  solar:   '#f59e0b',
+  wind:    '#3b82f6',
+  demand:  '#ef4444',
+  battery: '#8b5cf6',
+  reward:  '#1a6b4a',
+};
+
+const ACTION_COLORS_HEX = ['#94a3b8','#3b82f6','#f97316','#ef4444','#22c55e'];
+const ACTION_NAMES = ['Idle','Charge Battery','Discharge Battery','Buy Grid','Sell Grid'];
+
+// ---- State ----
+let state = {
+  running: false,
+  eventSource: null,
+  hour: 0,
+  history: [],
+  trainData: null,
+  trainTab: 'reward',
+};
+
+// ---- Chart instances ----
+let energyChart = null;
+let rewardChart = null;
+let trainChart  = null;
+
+// ---- Initialize hour cells ----
+(function initTimeline() {
+  const track = document.getElementById('hours-track');
+  for (let h = 0; h < 24; h++) {
+    const cell = document.createElement('div');
+    cell.className = 'hour-cell';
+    cell.id = `hcell-${h}`;
+    cell.textContent = h;
+    track.appendChild(cell);
+  }
+})();
+
+// ---- Build charts ----
+function buildEnergyChart() {
+  const ctx = document.getElementById('energy-chart').getContext('2d');
+  energyChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        { label:'Solar',  data:[], borderColor:COLORS.solar,  backgroundColor:'rgba(245,158,11,0.08)', tension:0.4, pointRadius:3, fill:true },
+        { label:'Wind',   data:[], borderColor:COLORS.wind,   backgroundColor:'rgba(59,130,246,0.08)', tension:0.4, pointRadius:3, fill:true },
+        { label:'Demand', data:[], borderColor:COLORS.demand, backgroundColor:'rgba(239,68,68,0.05)',  tension:0.4, pointRadius:3, borderDash:[4,2] },
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false, animation:{duration:200},
+      scales: {
+        x: { grid:{color:'#f0ede8'}, ticks:{font:{size:9}} },
+        y: { grid:{color:'#f0ede8'}, ticks:{font:{size:9}}, title:{display:true, text:'kW', font:{size:9}} }
+      },
+      plugins: {
+        legend:{position:'top', labels:{usePointStyle:true, pointStyle:'circle', boxWidth:7, padding:12, font:{size:10}}},
+        tooltip:{mode:'index', intersect:false}
+      }
+    }
+  });
+}
+
+function buildRewardChart() {
+  const ctx = document.getElementById('reward-chart').getContext('2d');
+  rewardChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: [],
+      datasets: [
+        {
+          label:'Step Reward',
+          data:[],
+          backgroundColor: (ctx) => {
+            const v = ctx.dataset.data[ctx.dataIndex];
+            return v >= 0 ? 'rgba(26,107,74,0.7)' : 'rgba(239,68,68,0.7)';
+          },
+          borderRadius: 3,
+        },
+        {
+          label:'Cumulative',
+          data:[],
+          type:'line',
+          borderColor:'#2563eb',
+          backgroundColor:'transparent',
+          tension:0.4, pointRadius:2, yAxisID:'y2'
+        }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false, animation:{duration:200},
+      scales: {
+        x: { grid:{color:'#f0ede8'}, ticks:{font:{size:9}} },
+        y: { grid:{color:'#f0ede8'}, ticks:{font:{size:9}}, title:{display:true,text:'Step Reward',font:{size:9}} },
+        y2:{ position:'right', grid:{drawOnChartArea:false}, ticks:{font:{size:9}}, title:{display:true,text:'Cumulative',font:{size:9}} }
+      },
+      plugins: {
+        legend:{position:'top', labels:{usePointStyle:true, boxWidth:7, font:{size:10}}},
+      }
+    }
+  });
+}
+
+function buildTrainChart(data, tab) {
+  const ctx = document.getElementById('train-chart').getContext('2d');
+  if (trainChart) trainChart.destroy();
+
+  const labels = data.map(r => r.episode);
+  let dataset, title, color;
+
+  if (tab === 'reward') {
+    dataset = data.map(r => r.total_reward);
+    title = 'Episode Reward'; color = COLORS.reward;
+  } else if (tab === 'renewable') {
+    dataset = data.map(r => (r.renewable_ratio * 100).toFixed(1));
+    title = 'Renewable %'; color = COLORS.solar;
+  } else {
+    dataset = data.map(r => r.epsilon);
+    title = 'Epsilon'; color = '#8b5cf6';
+  }
+
+  // Smoothed version
+  const smoothed = dataset.map((v, i, arr) => {
+    const w = arr.slice(Math.max(0,i-4), i+5);
+    return w.reduce((a,b) => a + parseFloat(b), 0) / w.length;
+  });
+
+  // Eval points
+  const evalPoints = data.filter(r => r.eval_reward !== null).map(r => ({x: r.episode, y: r.eval_reward}));
+
+  trainChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label:'Raw', data:dataset, borderColor: color+'44', backgroundColor:'transparent', tension:0, pointRadius:0, borderWidth:1 },
+        { label:'Smoothed', data:smoothed, borderColor:color, backgroundColor: color+'11', tension:0.4, pointRadius:0, fill:true, borderWidth:2 },
+        { label:'Eval', data: evalPoints.length ? evalPoints.map(p => ({ x: labels.indexOf(p.x), y: p.y })) : [],
+          type:'scatter', borderColor:'#f59e0b', backgroundColor:'#f59e0b', pointRadius:5, pointStyle:'star' }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false, animation:{duration:300},
+      scales: {
+        x: { grid:{color:'#f0ede8'}, ticks:{font:{size:9}, maxTicksLimit:10}, title:{display:true, text:'Episode', font:{size:9}} },
+        y: { grid:{color:'#f0ede8'}, ticks:{font:{size:9}}, title:{display:true, text:title, font:{size:9}} }
+      },
+      plugins: {
+        legend:{position:'top', labels:{usePointStyle:true, boxWidth:7, font:{size:10}}},
+      }
+    }
+  });
+}
+
+// ---- Update functions ----
+function updateKPIs(d) {
+  document.getElementById('kpi-solar').textContent   = d.solar.toFixed(1);
+  document.getElementById('kpi-wind').textContent    = d.wind.toFixed(1);
+  document.getElementById('kpi-demand').textContent  = d.demand.toFixed(1);
+  const rr = d.cumulative.renewable_ratio;
+  document.getElementById('kpi-renewable').textContent = (rr * 100).toFixed(1);
+  document.getElementById('kpi-cost').textContent    = d.cumulative.total_cost.toFixed(2);
+
+  // Hour badge
+  document.getElementById('hour-badge').querySelector('span').textContent = `Hour ${String(d.hour).padStart(2,'0')}/24`;
+}
+
+function updateBattery(d) {
+  const pct = (d.battery_soc / 20) * 100;
+  const fill = document.getElementById('battery-fill');
+  fill.style.width = pct + '%';
+  fill.className = 'battery-fill' + (pct < 25 ? ' low' : pct > 80 ? ' high' : '');
+  document.getElementById('battery-text').textContent = `${d.battery_soc.toFixed(1)} kWh (${pct.toFixed(0)}%)`;
+}
+
+function updatePrice(d) {
+  const pct = ((d.price - 0.05) / 0.30) * 100;
+  document.getElementById('price-fill').style.width  = pct + '%';
+  document.getElementById('price-fill').style.backgroundPosition = pct + '% 0';
+  document.getElementById('price-value').textContent = `$${d.price.toFixed(3)}`;
+}
+
+function updateTimeline(hour) {
+  for (let h = 0; h < 24; h++) {
+    const cell = document.getElementById(`hcell-${h}`);
+    if (!cell) continue;
+    cell.className = 'hour-cell';
+    if (h < hour) cell.classList.add('done-step');
+    if (h === hour) cell.classList.add('active');
+  }
+}
+
+function updateActionDisplay(d) {
+  const pill = document.getElementById('last-action-pill');
+  const colors = [
+    {bg:'#f8fafc',color:'#475569',border:'#cbd5e1'},
+    {bg:'#eff6ff',color:'#1d4ed8',border:'#bfdbfe'},
+    {bg:'#fff7ed',color:'#c2410c',border:'#fed7aa'},
+    {bg:'#fef2f2',color:'#dc2626',border:'#fecaca'},
+    {bg:'#f0fdf4',color:'#15803d',border:'#bbf7d0'},
+  ];
+  const c = colors[d.action];
+  pill.style.background = c.bg;
+  pill.style.color = c.color;
+  pill.style.border = `1px solid ${c.border}`;
+  pill.textContent = `${d.action_icon} ${d.action_name}`;
+  document.getElementById('last-reasoning').textContent = d.reasoning;
+}
+
+function updateQValues(d) {
+  const container = document.getElementById('q-values');
+  container.innerHTML = '';
+  if (!d.q_values || d.q_values.every(q => q === 0)) {
+    container.innerHTML = '<div style="font-size:0.72rem;color:var(--text-muted)">Heuristic mode — no Q-values</div>';
+    return;
+  }
+  const maxQ = Math.max(...d.q_values.map(Math.abs));
+  const bestIdx = d.q_values.indexOf(Math.max(...d.q_values));
+  const names = ['Idle','Charge','Discharge','Buy Grid','Sell Grid'];
+  d.q_values.forEach((q, i) => {
+    const pct = maxQ > 0 ? Math.max(0, (q / maxQ) * 100) : 0;
+    const row = document.createElement('div');
+    row.className = 'q-row';
+    row.innerHTML = `
+      <span class="q-label">${names[i]}</span>
+      <div class="q-track"><div class="q-fill ${i===bestIdx?'best':''}" style="width:${pct}%"></div></div>
+      <span class="q-val">${q.toFixed(3)}</span>
+    `;
+    container.appendChild(row);
+  });
+}
+
+function updateEnergyChart(d) {
+  const h = String(d.hour).padStart(2,'0') + 'h';
+  energyChart.data.labels.push(h);
+  energyChart.data.datasets[0].data.push(d.solar);
+  energyChart.data.datasets[1].data.push(d.wind);
+  energyChart.data.datasets[2].data.push(d.demand);
+  energyChart.update();
+}
+
+function updateRewardChart(d) {
+  const h = String(d.hour).padStart(2,'0') + 'h';
+  rewardChart.data.labels.push(h);
+  rewardChart.data.datasets[0].data.push(d.reward);
+  rewardChart.data.datasets[1].data.push(d.cumulative.total_reward);
+  rewardChart.update();
+}
+
+function addActionLog(d) {
+  const body = document.getElementById('action-log-body');
+  const aColors = [
+    {bg:'#f8fafc',color:'#475569',border:'#e2e8f0'},
+    {bg:'#eff6ff',color:'#1d4ed8',border:'#bfdbfe'},
+    {bg:'#fff7ed',color:'#c2410c',border:'#fed7aa'},
+    {bg:'#fef2f2',color:'#dc2626',border:'#fecaca'},
+    {bg:'#f0fdf4',color:'#15803d',border:'#bbf7d0'},
+  ];
+  const c = aColors[d.action];
+  const entry = document.createElement('div');
+  entry.className = 'action-entry';
+  entry.innerHTML = `
+    <span class="action-hour">${String(d.hour).padStart(2,'0')}:00</span>
+    <span class="action-pill" style="background:${c.bg};color:${c.color};border:1px solid ${c.border}">
+      ${d.action_icon} ${d.action_name}
+    </span>
+    <span class="action-reasoning">${d.reasoning}</span>
+    <span class="action-reward" style="color:${d.reward>=0?'#15803d':'#dc2626'}">
+      ${d.reward >= 0 ? '+' : ''}${d.reward.toFixed(2)}
+    </span>
+  `;
+  body.insertBefore(entry, body.firstChild);
+  document.getElementById('log-count').textContent = `${d.hour + 1} step${d.hour>0?'s':''}`;
+}
+
+function processStep(d) {
+  state.history.push(d);
+  updateKPIs(d);
+  updateBattery(d);
+  updatePrice(d);
+  updateTimeline(d.hour);
+  updateActionDisplay(d);
+  updateQValues(d);
+  updateEnergyChart(d);
+  updateRewardChart(d);
+  addActionLog(d);
+}
+
+function clearCharts() {
+  energyChart.data.labels = [];
+  energyChart.data.datasets.forEach(ds => ds.data = []);
+  energyChart.update();
+  rewardChart.data.labels = [];
+  rewardChart.data.datasets.forEach(ds => ds.data = []);
+  rewardChart.update();
+  document.getElementById('action-log-body').innerHTML = '';
+  document.getElementById('log-count').textContent = '0 steps';
+  document.getElementById('last-action-pill').textContent = '⏸ Waiting…';
+  document.getElementById('last-reasoning').textContent = 'Start the simulation to see agent reasoning.';
+  document.getElementById('q-values').innerHTML = '<div class="q-row" style="color:var(--text-muted);font-size:0.72rem">Run episode to see Q-values</div>';
+  for (let h = 0; h < 24; h++) {
+    const cell = document.getElementById(`hcell-${h}`);
+    if (cell) cell.className = 'hour-cell';
+  }
+}
+
+// ---- API calls ----
+async function checkStatus() {
+  try {
+    const r = await fetch('/api/status');
+    const d = await r.json();
+    const badge = document.getElementById('model-badge');
+    if (d.model_loaded) {
+      badge.className = 'badge badge-green';
+      badge.innerHTML = '<span class="dot dot-pulse"></span><span>DQN Model Active</span>';
+    } else {
+      badge.className = 'badge badge-amber';
+      badge.innerHTML = '<span class="dot dot-pulse"></span><span>Heuristic Mode</span>';
+    }
+  } catch {}
+}
+
+async function resetSim() {
+  if (state.eventSource) { state.eventSource.close(); state.eventSource = null; }
+  state.running = false;
+  state.history = [];
+  setButtons(false);
+  clearCharts();
+  try {
+    await fetch('/api/reset', {method:'POST'});
+    updateTimeline(0);
+    document.getElementById('hour-badge').querySelector('span').textContent = 'Hour 00/24';
+    // Reset KPIs
+    ['kpi-solar','kpi-wind','kpi-demand','kpi-renewable','kpi-cost'].forEach(id => {
+      document.getElementById(id).textContent = '—';
+    });
+    document.getElementById('battery-fill').style.width = '50%';
+    document.getElementById('battery-text').textContent = '10.0 kWh (50%)';
+    document.getElementById('battery-fill').className = 'battery-fill';
+  } catch(e) { console.error(e); }
+}
+
+async function stepOnce() {
+  if (state.running) return;
+  try {
+    const r = await fetch('/api/step', {method:'POST'});
+    const j = await r.json();
+    if (j.status === 'ok') processStep(j.data);
+  } catch(e) { console.error(e); }
+}
+
+function runEpisode() {
+  if (state.running) {
+    // Stop
+    if (state.eventSource) { state.eventSource.close(); state.eventSource = null; }
+    state.running = false;
+    setButtons(false);
+    return;
+  }
+
+  clearCharts();
+  state.running = true;
+  state.history = [];
+  setButtons(true);
+
+  fetch('/api/reset', {method:'POST'}).then(() => {
+    const es = new EventSource('/api/run_episode');
+    state.eventSource = es;
+    es.onmessage = (e) => {
+      const d = JSON.parse(e.data);
+      if (d.status === 'episode_complete') {
+        es.close();
+        state.eventSource = null;
+        state.running = false;
+        setButtons(false);
+        return;
+      }
+      processStep(d);
+    };
+    es.onerror = () => {
+      es.close();
+      state.eventSource = null;
+      state.running = false;
+      setButtons(false);
+    };
+  });
+}
+
+async function loadTrainCurve() {
+  const section = document.getElementById('train-section');
+  section.style.display = 'block';
+  try {
+    const r = await fetch('/api/train_curve');
+    const j = await r.json();
+    state.trainData = j.data;
+    buildTrainChart(state.trainData, state.trainTab);
+  } catch(e) { console.error(e); }
+}
+
+function switchTrainTab(tab) {
+  state.trainTab = tab;
+  document.querySelectorAll('.train-tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  if (state.trainData) buildTrainChart(state.trainData, tab);
+}
+
+function setButtons(running) {
+  const btnRun = document.getElementById('btn-run');
+  btnRun.textContent = running ? '■ Stop' : '▶ Run Episode';
+  btnRun.className   = running ? 'btn btn-danger' : 'btn btn-primary';
+  document.getElementById('btn-step').disabled  = running;
+  document.getElementById('btn-reset').disabled = running;
+}
+
+// ---- Init ----
+buildEnergyChart();
+buildRewardChart();
+checkStatus();
+setInterval(checkStatus, 5000);
+</script>
+</body>
+</html>
